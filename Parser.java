@@ -13,6 +13,18 @@ import net.beadsproject.beads.data.audiofile.WavFileReaderWriter;
  */
 public class Parser {
 	
+	//Need ID tag on front of audio, so that the listener knows when the 
+	//actual data begins being sent.  This can either be independent of the
+	//lowFrequency/sensitivity chosen by the sender, such as a unique sequence
+	//of bytes used for every transmission, or dependent as in a function which
+	//the sender and receiver receive the same result from depending on the 
+	//lowFrequency, transmissionSpeed, and sensitivity.
+	
+	private int getBits(int value, int numBits)
+	{
+		
+	}
+	
 	/**
 	 * Converts a byte array into an audio file
 	 * 
@@ -71,6 +83,54 @@ public class Parser {
 		} catch (FileFormatException e) {
 			e.printStackTrace();
 		}
+	}
+	
+	/**
+	 * Decode the audio file AFTER relevant bits have been taken from the front
+	 * of the transmission that determine:
+	 *   Size
+	 *   TransmissionSpeed
+	 *   LowFrequency
+	 *   Sensitivity
+	 */
+	public static byte[] decodeAudioFile(float[][] audioMatrix, int size, int transmissionSpeed, float lowFrequency, float sensitivity) {
+		//Restrict to one channel for now until we know what they are for.
+		byte[] bytes = new byte[size];
+		
+		byte currentByte = 0;
+		int currentByteIndex = 0;
+		float currentFrequency;
+		int bitsInCurrentByte = 0;
+		
+		for(int index = 0; index < audioMatrix[0].length; index++) {
+			
+			currentFrequency = audioMatrix[0][index];
+			
+			float currentLowOffset = currentFrequency - lowFrequency;
+			int currentBits = currentLowOffset / sensitivity;  //Should be an exact division
+			int currentBitsSize = transmissionSpeed;
+			
+			while(currentBitsSize > 0)
+			{
+				if(bitsInCurrentByte + currentBitsSize >= 8)
+				{
+					currentByte &= (currentBits >> (currentBitsSize + bitsInCurrentByte - 8));
+					currentBits = currentBits >> (8 - bitsInCurrentByte);
+					bytes[currentByteIndex] = currentByte;
+					currentByteIndex++;
+					currentByte = 0;
+					currentBitsSize -= (8 - bitsInCurrentByte);
+					bitsInCurrentByte = 0;
+				}
+				else
+				{
+				    currentByte &= (currentBits << (8 - bitsInCurrentByte - currentBitsSize));
+				    bitsInCurrentByte += currentBitsSize;
+				    currentBitsSize = 0;
+				}
+			}
+		}
+		return bytes;
 	}
 	
 	/**
